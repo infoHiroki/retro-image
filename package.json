@@ -1,0 +1,31 @@
+{
+  "name": "@infohiroki/retro-image",
+  "version": "0.1.0",
+  "description": "1990年代のブラウザの画像読み込み（走査線・インターレース・プログレッシブ）を再現する Web Component",
+  "type": "module",
+  "main": "retro-image.js",
+  "module": "retro-image.js",
+  "exports": {
+    ".": "./retro-image.js"
+  },
+  "files": [
+    "retro-image.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "web-component",
+    "custom-element",
+    "canvas",
+    "image",
+    "progressive",
+    "interlace",
+    "scanline",
+    "retro"
+  ],
+  "license": "MIT",
+  "author": "Hiroki Takamura",
+  "sideEffects": [
+    "./retro-image.js"
+  ]
+}

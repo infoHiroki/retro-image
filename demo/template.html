@@ -1,0 +1,566 @@
+<title>retro-image — 90年代の画像読み込みを再現するコンポーネント</title>
+__SCRIPT_TAG__
+
+<style>
+  /* 主題が「転送速度とバイト数」なので、見出しとデータは等幅を主役に据える。
+     本文だけ日本語システムフォントに逃がす。 */
+  :root {
+    --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif;
+
+    /* 消灯した CRT の緑がかったグレーをニュートラルの軸にして、
+       アクセントはモデムの転送中 LED の琥珀。補色で締める。 */
+    --ground: #EBEEEA;
+    --surface: #F7F9F5;
+    --surface-2: #E1E6DE;
+    --line: #C8D0C6;
+    --ink: #16202B;
+    --muted: #5B6B70;
+    --accent: #8A5A0B;
+    --accent-soft: #E8D9B8;
+    --ok: #2A6B50;
+
+    --step-0: 0.8125rem;
+    --step-1: 0.9375rem;
+    --step-3: 1.375rem;
+    --step-5: 2.75rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0E171C;
+      --surface: #16222A;
+      --surface-2: #1F2E36;
+      --line: #2C3D45;
+      --ink: #DDE6E2;
+      --muted: #8B9CA1;
+      --accent: #E3A83A;
+      --accent-soft: #3B3018;
+      --ok: #4FAE85;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0E171C;
+    --surface: #16222A;
+    --surface-2: #1F2E36;
+    --line: #2C3D45;
+    --ink: #DDE6E2;
+    --muted: #8B9CA1;
+    --accent: #E3A83A;
+    --accent-soft: #3B3018;
+    --ok: #4FAE85;
+  }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--step-1);
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) clamp(1rem, 4vw, 2.5rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3rem, 7vw, 5rem);
+  }
+
+  /* --- 見出しまわり --- */
+  .masthead { display: flex; flex-direction: column; gap: 0.75rem; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--font-mono);
+    font-size: clamp(2rem, 6vw, var(--step-5));
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-family: var(--font-mono);
+    font-size: var(--step-3);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: var(--font-mono);
+    font-size: var(--step-1);
+    font-weight: 600;
+  }
+
+  .lead { max-width: 42rem; color: var(--muted); }
+  p { max-width: 42rem; }
+
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+
+  .section-head { display: flex; flex-direction: column; gap: 0.4rem; }
+
+  /* --- 実演パネル --- */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .stage {
+    /* 画像が隠れている間はここの地色が見える = 当時の「まだ来ていない領域」 */
+    background: var(--surface-2);
+    display: flex;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .stage img { display: block; width: 100%; height: auto; }
+  retro-image { display: block; width: 100%; }
+
+  /* 当時のステータスバーを等幅の升目で描く。装飾ではなく進捗の実表示。 */
+  .status {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    padding: 0.7rem 0.9rem;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.9rem;
+    align-items: baseline;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status .meter { color: var(--accent); letter-spacing: -0.05em; }
+  .status.is-done .meter { color: var(--ok); }
+  .status .note { color: var(--muted); }
+
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.9rem;
+    border-top: 1px solid var(--line);
+    align-items: center;
+  }
+
+  button, select {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    color: var(--ink);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  button:hover, select:hover { border-color: var(--accent); }
+
+  button[aria-pressed="true"] {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--surface);
+  }
+
+  button.primary:hover { filter: brightness(1.08); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .control-label {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-right: 0.15rem;
+  }
+
+  label.check {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+  }
+
+  /* --- 3方式の比較 --- */
+  .race {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+    gap: 1rem;
+  }
+
+  .race .panel { gap: 0; }
+  .race .caption { padding: 0.9rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  .race .caption p { font-size: var(--step-0); color: var(--muted); max-width: none; line-height: 1.6; }
+
+  /* --- コードと表 --- */
+  .scroll-x { overflow-x: auto; }
+
+  pre {
+    font-family: var(--font-mono);
+    font-size: var(--step-0);
+    line-height: 1.7;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    tab-size: 2;
+  }
+
+  code { font-family: var(--font-mono); }
+
+  p code, li code, td code {
+    font-size: 0.9em;
+    background: var(--surface-2);
+    padding: 0.1em 0.35em;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 34rem;
+    font-size: var(--step-0);
+  }
+
+  th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.6rem 0.9rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  th {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    color: var(--muted);
+    border-bottom-color: var(--ink);
+  }
+
+  td:first-child { font-family: var(--font-mono); color: var(--accent); white-space: nowrap; }
+
+  ul { padding-left: 1.15rem; max-width: 42rem; list-style: disc; }
+  li + li { margin-top: 0.6rem; }
+  li::marker { color: var(--accent); }
+
+  .footnote {
+    font-size: var(--step-0);
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    padding-top: 1.25rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Web Component / 依存ゼロ</p>
+    <h1>retro-image</h1>
+    <p class="lead">
+      画像が上から一行ずつ出てきた、あの読み込みを再現するコンポーネント。
+      ベースライン JPEG の走査線、GIF89a のインターレース、プログレッシブ JPEG の
+      3 方式を、当時のデコード順そのままに描き直す。
+    </p>
+  </header>
+
+  <section>
+    <div class="section-head">
+      <h2>まずは動かす</h2>
+      <p>方式を選んで再生。下のバーは実際の描画進捗。</p>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <retro-image id="hero" mode="interlace" duration="2600" bytes="__BYTES__" eager>
+          <img __IMG_ATTR__ width="960" height="540" alt="地平線に沈む太陽と、手前に伸びるワイヤーフレームのグリッド。1990年代のコンピューターグラフィックス風の風景">
+        </retro-image>
+      </div>
+      <div class="status" id="hero-status">
+        <span class="meter">░░░░░░░░░░░░░░░░░░░░░░░░</span>
+        <span class="pct">0%</span>
+        <span class="note">待機中</span>
+      </div>
+      <div class="controls">
+        <span class="control-label">方式</span>
+        <button data-mode="scanline" aria-pressed="false">scanline</button>
+        <button data-mode="interlace" aria-pressed="true">interlace</button>
+        <button data-mode="progressive" aria-pressed="false">progressive</button>
+        <button class="primary" id="hero-play">再生</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>3 つを同時に走らせる</h2>
+      <p>同じ画像・同じ所要時間で並走させると、それぞれのデータの届き方の違いがそのまま見える。</p>
+    </div>
+
+    <div class="race">
+      <div class="panel">
+        <div class="stage">
+          <retro-image data-race mode="scanline" duration="3200">
+            <img __IMG_ATTR__ width="960" height="540" alt="走査線方式で読み込まれる、夕日とグリッドの風景">
+          </retro-image>
+        </div>
+        <div class="caption">
+          <h3>scanline</h3>
+          <p>ベースライン JPEG / 非インターレース GIF。データがスキャンライン順に並んでいるので、届いたぶんだけ上から描くとこうなる。</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="stage">
+          <retro-image data-race mode="interlace" duration="3200">
+            <img __IMG_ATTR__ width="960" height="540" alt="インターレース方式で読み込まれる、夕日とグリッドの風景">
+          </retro-image>
+        </div>
+        <div class="caption">
+          <h3>interlace</h3>
+          <p>GIF89a のインターレース。8 行おき → 4 行おき → 2 行おき → 残り の 4 パス。各行を次のパスが埋めるまで縦に引き伸ばすので、ブラインドが閉じるように見える。</p>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="stage">
+          <retro-image data-race mode="progressive" duration="3200">
+            <img __IMG_ATTR__ width="960" height="540" alt="プログレッシブ方式で読み込まれる、夕日とグリッドの風景">
+          </retro-image>
+        </div>
+        <div class="caption">
+          <h3>progressive</h3>
+          <p>プログレッシブ JPEG。DCT 係数が低周波から届くため、粗い全体像が先に出て、そこへ細部が乗っていく。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls panel">
+      <button class="primary" id="race-play">3 つ同時に再生</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>回線速度で待たされる</h2>
+      <p>
+        <code>speed</code> を指定すると、画像の実バイト数から当時の所要時間を割り出す。
+        実効スループットは bps / 10 で見積もっている（28.8k で約 2.8KB/s、当時の体感どおり）。
+      </p>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <retro-image id="modem" mode="interlace" speed="28.8k" bytes="__BYTES__" max-duration="60000">
+          <img __IMG_ATTR__ width="960" height="540" alt="回線速度を指定して読み込まれる、夕日とグリッドの風景">
+        </retro-image>
+      </div>
+      <div class="status" id="modem-status">
+        <span class="meter">░░░░░░░░░░░░░░░░░░░░░░░░</span>
+        <span class="pct">0%</span>
+        <span class="note">待機中</span>
+      </div>
+      <div class="controls">
+        <span class="control-label">回線</span>
+        <select id="modem-speed">
+          <option value="14.4k">14.4k モデム</option>
+          <option value="28.8k" selected>28.8k モデム</option>
+          <option value="33.6k">33.6k モデム</option>
+          <option value="56k">56k モデム</option>
+          <option value="isdn">ISDN 64k</option>
+        </select>
+        <label class="check">
+          <input type="checkbox" id="modem-cap" checked>
+          8 秒で打ち切る
+        </label>
+        <button class="primary" id="modem-play">再生</button>
+      </div>
+    </div>
+    <p class="footnote" id="modem-note"></p>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>使い方</h2>
+      <p>既存の <code>&lt;img&gt;</code> を包むだけ。JS が動かなければ普通の画像として出る。</p>
+    </div>
+
+    <pre><code>&lt;script type="module" src="/retro-image.js"&gt;&lt;/script&gt;
+
+&lt;retro-image mode="interlace" duration="1400" once&gt;
+  &lt;img src="/photo.jpg" alt="..." width="960" height="540"&gt;
+&lt;/retro-image&gt;</code></pre>
+
+    <div class="scroll-x">
+      <table>
+        <thead>
+          <tr><th>属性</th><th>既定</th><th>意味</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>mode</td><td>interlace</td><td>scanline / interlace / progressive</td></tr>
+          <tr><td>duration</td><td>1400</td><td>演出の長さ（ミリ秒）</td></tr>
+          <tr><td>speed</td><td>—</td><td>14.4k / 28.8k / 33.6k / 56k / isdn。指定すると duration より優先され、実バイト数から時間を算出する</td></tr>
+          <tr><td>max-duration</td><td>8000</td><td>speed 使用時の上限。長すぎる待ちを切る</td></tr>
+          <tr><td>bytes</td><td>自動</td><td>転送量を明示。未指定なら Resource Timing から取得し、取れなければ画素数から概算する</td></tr>
+          <tr><td>once</td><td>—</td><td>一度再生したらセッション中は再生しない</td></tr>
+          <tr><td>eager</td><td>—</td><td>ビューポート待ちせず即再生。既定では画面に入ってから始まる</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      再生の開始と終了で <code>retro:start</code> / <code>retro:end</code> が bubbles で飛ぶ。
+      任意のタイミングで再生したいときは要素の <code>play()</code> を呼ぶ。
+    </p>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <h2>実装で気をつけたこと</h2>
+    </div>
+    <ul>
+      <li>
+        <strong>レイアウトを動かさない。</strong> canvas は <code>position: absolute</code> で
+        <code>&lt;img&gt;</code> に重ねるだけなので、高さを決めるのは元の img のまま。
+        当時さんざん画面をガタつかせた元凶が、いま CLS と呼ばれて怒られているので、そこは再現しない。
+      </li>
+      <li>
+        <strong>別オリジンの画像でも動く。</strong> 描画は <code>drawImage</code> だけで完結させ、
+        <code>getImageData</code> を使っていない。canvas が tainted にならないので CORS 設定が要らない。
+      </li>
+      <li>
+        <strong>画像が消えたままにならない。</strong> img を隠すのは JS がそこまで到達したときだけ。
+        再生の完了・エラー・タイムアウトのすべてが同じ復帰処理を通る。
+      </li>
+      <li>
+        <strong>縞の粗さは表示サイズ基準。</strong> インターレースの 8 行おきを元画像の実ピクセルで刻むと、
+        いまどきの大きな画像では縞が細かすぎて見えない。当時の見た目に合わせて表示上の行で刻んでいる。
+      </li>
+      <li>
+        <strong><code>prefers-reduced-motion: reduce</code> なら自動再生しない。</strong>
+        img に触れないので通常表示のまま出る。ユーザー自身が再生ボタンを押した場合は、意図された操作なので動く。
+      </li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+(() => {
+  const BYTES = __BYTES__;
+__IMG_SETUP__
+__COMPONENT_INLINE__
+
+  /* ------------------------------------------------------------ demo UI */
+
+  const CELLS = 24;
+  function meterText(p) {
+    const filled = Math.round(p * CELLS);
+    return '█'.repeat(filled) + '░'.repeat(CELLS - filled);
+  }
+
+  /** 進捗バーを retro:start / retro:end に合わせて動かす。 */
+  function bindStatus(el, statusEl) {
+    const meter = statusEl.querySelector('.meter');
+    const pct = statusEl.querySelector('.pct');
+    const note = statusEl.querySelector('.note');
+    let raf = null;
+
+    el.addEventListener('retro:start', (e) => {
+      const { duration, mode } = e.detail;
+      const t0 = performance.now();
+      statusEl.classList.remove('is-done');
+      cancelAnimationFrame(raf);
+
+      const tick = (now) => {
+        const p = Math.min(1, (now - t0) / duration);
+        meter.textContent = meterText(p);
+        pct.textContent = Math.round(p * 100) + '%';
+        note.textContent = `${Math.round(p * BYTES / 1024)}K / ${(BYTES / 1024).toFixed(1)}K — ${mode}`;
+        if (p < 1) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    });
+
+    el.addEventListener('retro:end', () => {
+      cancelAnimationFrame(raf);
+      meter.textContent = meterText(1);
+      pct.textContent = '100%';
+      note.textContent = `完了 — ${(BYTES / 1024).toFixed(1)}K`;
+      statusEl.classList.add('is-done');
+    });
+  }
+
+  /* hero */
+  const hero = document.getElementById('hero');
+  bindStatus(hero, document.getElementById('hero-status'));
+
+  document.querySelectorAll('[data-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-mode]').forEach((b) =>
+        b.setAttribute('aria-pressed', String(b === btn))
+      );
+      hero.setAttribute('mode', btn.dataset.mode);
+      hero.play();
+    });
+  });
+  document.getElementById('hero-play').addEventListener('click', () => hero.play());
+
+  /* 3 方式の同時再生 */
+  document.getElementById('race-play').addEventListener('click', () => {
+    document.querySelectorAll('[data-race]').forEach((el) => el.play());
+  });
+
+  /* 回線速度 */
+  const modem = document.getElementById('modem');
+  const modemSpeed = document.getElementById('modem-speed');
+  const modemCap = document.getElementById('modem-cap');
+  const modemNote = document.getElementById('modem-note');
+  bindStatus(modem, document.getElementById('modem-status'));
+
+  const BPS = { '14.4k': 14400, '28.8k': 28800, '33.6k': 33600, '56k': 53000, isdn: 64000 };
+
+  function syncModem() {
+    const speed = modemSpeed.value;
+    modem.setAttribute('speed', speed);
+    modem.setAttribute('max-duration', modemCap.checked ? '8000' : '600000');
+    const full = (BYTES * 10) / BPS[speed];
+    modemNote.textContent =
+      `この ${(BYTES / 1024).toFixed(1)}KB の画像を${modemSpeed.selectedOptions[0].textContent}で落とすと ${full.toFixed(1)} 秒。` +
+      (modemCap.checked ? ' いまは 8 秒で打ち切っている。' : ' 打ち切りなし。最後まで待つ。');
+  }
+
+  modemSpeed.addEventListener('change', () => { syncModem(); modem.play(); });
+  modemCap.addEventListener('change', syncModem);
+  document.getElementById('modem-play').addEventListener('click', () => modem.play());
+  syncModem();
+})();
+</script>

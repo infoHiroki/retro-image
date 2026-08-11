@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+
+# 検証・生成の作業ファイル（成果物の index.html / dist / docs はコミットする）
+test/shots/
+test/_standalone-wrapped.html
+docs/_frames/
+docs/_sheet.html
