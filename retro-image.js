@@ -183,14 +183,27 @@ function injectStyle() {
   const el = document.createElement('style');
   el.id = STYLE_ID;
   // canvas は絶対配置なので、レイアウトは中の <img> が決める = CLS を出さない。
+  // 高さを height:auto にしてあるのは、canvas 自身の縦横比(img と同じ)で決めさせるため。
+  // inset:0 で親いっぱいに広げると、ボタンを置いたときにそのぶんまで伸びてしまう。
   el.textContent = `
-retro-image { display: inline-block; position: relative; line-height: 0; max-width: 100%; }
-retro-image > img { max-width: 100%; height: auto; }
+retro-image { display: inline-block; position: relative; max-width: 100%; }
+retro-image > img { max-width: 100%; height: auto; vertical-align: top; }
 retro-image > canvas.retro-image__canvas {
-  position: absolute; inset: 0; width: 100%; height: 100%;
+  position: absolute; left: 0; top: 0; width: 100%; height: auto;
   pointer-events: none;
 }
-@media print { retro-image > canvas.retro-image__canvas { display: none; } }
+retro-image > .retro-image__replay {
+  display: inline-block; margin-top: 0.5em;
+  font: inherit; font-size: 0.8em; line-height: 1.4;
+  color: inherit; background: transparent;
+  border: 1px solid currentColor; border-radius: 2px;
+  padding: 0.3em 0.9em; cursor: pointer; opacity: 0.65;
+}
+retro-image > .retro-image__replay:hover { opacity: 1; }
+@media print {
+  retro-image > canvas.retro-image__canvas,
+  retro-image > .retro-image__replay { display: none; }
+}
 `;
   document.head.appendChild(el);
 }
@@ -225,12 +238,15 @@ class RetroImage extends HTMLElement {
 
     this.img = this.querySelector('img');
     if (!this.img) return;
-
-    // 演出を諦める条件。<img> には一切触らないので通常表示のまま。
-    if (prefersReducedMotion() || !this.#canvasAvailable()) return;
-    if (this.hasAttribute('once') && this.#alreadyPlayed()) return;
+    if (!this.#canvasAvailable()) return; // canvas が無ければ手の打ちようがない
 
     injectStyle();
+    this.#setupControls();
+
+    // 自動再生を諦める条件。<img> には一切触らないので通常表示のまま出る。
+    // ボタンは残すので、見たい人は自分の操作で再生できる。
+    if (prefersReducedMotion()) return;
+    if (this.hasAttribute('once') && this.#alreadyPlayed()) return;
 
     // JS がここまで動いた時点で隠す。以降は必ず自前で描いて戻す責任を負う。
     // visibility なら領域は残るのでレイアウトは動かない。
@@ -260,6 +276,22 @@ class RetroImage extends HTMLElement {
    */
   play() {
     this.#start();
+  }
+
+  /**
+   * controls 属性があれば再生ボタンを足す。属性の値がラベルになる
+   * (`controls="もう一度見る"`)。JS が動いたときにだけ生えるので、
+   * 押しても何も起きないボタンが残ることはない。
+   */
+  #setupControls() {
+    if (!this.hasAttribute('controls') || this._button) return;
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'retro-image__replay';
+    button.textContent = this.getAttribute('controls') || 'Replay';
+    button.addEventListener('click', () => this.play());
+    this.appendChild(button);
+    this._button = button;
   }
 
   #canvasAvailable() {
@@ -350,7 +382,7 @@ class RetroImage extends HTMLElement {
 
     if (!this._canvas) {
       this._canvas = canvas;
-      this.appendChild(canvas);
+      this.insertBefore(canvas, img.nextSibling); // ボタンより前、img の直後に置く
     }
 
     const mode = this.getAttribute('mode') || 'interlace';

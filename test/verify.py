@@ -90,6 +90,42 @@ def run(browser, name, url, capture_shots, external_image=True):
             ),
         )
 
+    print("\n== 再生ボタン（controls） ==")
+    check(
+        "controls 属性でボタンが生える",
+        page.evaluate(
+            "() => { const b = document.querySelector('#controls-demo .retro-image__replay');"
+            " return !!b && b.textContent === 'もう一度見る' && b.type === 'button'; }"
+        ),
+    )
+    check(
+        "controls の無い要素にはボタンが生えない",
+        page.evaluate("() => !document.querySelector('#hero .retro-image__replay')"),
+    )
+    check(
+        "ボタンを押すと再生が始まる",
+        page.evaluate(
+            """() => new Promise((resolve) => {
+                const el = document.getElementById('controls-demo');
+                el.addEventListener('retro:start', () => resolve(true), { once: true });
+                el.querySelector('.retro-image__replay').click();
+                setTimeout(() => resolve(false), 1500);
+            })"""
+        ),
+    )
+    check(
+        "ボタンは canvas に覆われない（クリックが通る位置にある）",
+        page.evaluate(
+            """() => {
+                const el = document.getElementById('controls-demo');
+                const b = el.querySelector('.retro-image__replay').getBoundingClientRect();
+                const c = el.querySelector('canvas')?.getBoundingClientRect();
+                return !c || c.bottom <= b.top + 1;
+            }"""
+        ),
+    )
+    page.wait_for_timeout(2200)
+
     print("\n== レイアウト ==")
     before = page.evaluate("() => document.getElementById('hero').getBoundingClientRect().height")
     page.evaluate("() => { const h = document.getElementById('hero'); h.setAttribute('duration','4000'); h.play(); }")
