@@ -16,6 +16,8 @@
  *                          14.4k / 28.8k / 33.6k / 56k / isdn
  *   max-duration="8000"    speed 指定時の上限(ms)
  *   bytes="102400"         転送量を明示(Resource Timing が取れない時)
+ *   controls="ラベル"      再生ボタンを出す(値がラベル、省略時は Replay)
+ *   manual                 自動再生しない。controls のボタンからだけ再生する
  *   once                   一度再生したらセッション中は再生しない
  *   eager                  ビューポート待ちせず即再生
  *
@@ -246,6 +248,7 @@ class RetroImage extends HTMLElement {
     // 自動再生を諦める条件。<img> には一切触らないので通常表示のまま出る。
     // ボタンは残すので、見たい人は自分の操作で再生できる。
     if (prefersReducedMotion()) return;
+    if (this.hasAttribute('manual')) return;
     if (this.hasAttribute('once') && this.#alreadyPlayed()) return;
 
     // JS がここまで動いた時点で隠す。以降は必ず自前で描いて戻す責任を負う。

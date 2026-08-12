@@ -2,8 +2,8 @@
 """demo/template.html からデモページを 2 種類つくる。
 
   index.html            retro-image.js と demo/sunset.jpg を普通に参照する版。
-                        GitHub Pages で配信する実物であり、使い方の見本も兼ねる。
-  dist/standalone.html  JS と画像を全部埋めた 1 ファイル版。どこにでも置ける。
+                        実際の組み込み方の見本を兼ねる（ES module なので配信が要る）。
+  dist/standalone.html  JS と画像を全部埋めた 1 ファイル版。ブラウザで直接開ける。
 
 使い方: python3 tools/build.py
 """
@@ -19,7 +19,7 @@ image = (root / "demo" / "sunset.jpg").read_bytes()
 BYTES = str(len(image))
 
 # 単一ファイル版を置く先（Artifact など）はページの外枠と最小 reset を用意してくれるので、
-# テンプレートは body の中身だけを持つ。自前で配信する index.html にはその外枠が要る。
+# テンプレートは body の中身だけを持つ。単体で開く index.html にはその外枠が要る。
 RESET = """*, *::before, *::after { box-sizing: border-box }
     body, h1, h2, h3, p, pre, figure { margin: 0 }
     img { display: block; max-width: 100% }

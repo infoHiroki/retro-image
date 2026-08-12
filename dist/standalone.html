@@ -422,16 +422,18 @@
     <p>
       スクロールで一度きり再生されるだけだと見逃すので、
       <code>controls</code> を付けると再生ボタンが生えます。属性の値がそのままラベルです。
+      長い演出を勝手に始めたくない場合は <code>manual</code> を足すと、
+      自動再生をやめてボタン待ちになります。
     </p>
 
-    <pre><code>&lt;retro-image mode="scanline" controls="もう一度見る"&gt;
+    <pre><code>&lt;retro-image mode="scanline" manual controls="もう一度見る"&gt;
   &lt;img src="/photo.jpg" alt="..." width="960" height="540"&gt;
 &lt;/retro-image&gt;</code></pre>
 
     <div class="panel">
       <div class="stage">
-        <retro-image id="controls-demo" mode="scanline" duration="2000" controls="もう一度見る">
-          <img data-demo width="960" height="540" alt="再生ボタン付きの実演">
+        <retro-image id="controls-demo" mode="scanline" duration="2000" manual controls="もう一度見る">
+          <img data-demo width="960" height="540" alt="再生ボタンからだけ動く実演">
         </retro-image>
       </div>
     </div>
@@ -448,6 +450,7 @@
           <tr><td>max-duration</td><td>8000</td><td>speed 使用時の上限。長すぎる待ちを切る</td></tr>
           <tr><td>bytes</td><td>自動</td><td>転送量を明示。未指定なら Resource Timing から取得し、取れなければ画素数から概算する</td></tr>
           <tr><td>controls</td><td>—</td><td>再生ボタンを出す。属性の値がラベルになる（<code>controls="もう一度見る"</code>、省略時は <code>Replay</code>）</td></tr>
+          <tr><td>manual</td><td>—</td><td>自動再生しない。<code>controls</code> のボタンからだけ再生する</td></tr>
           <tr><td>once</td><td>—</td><td>一度再生したらセッション中は再生しない</td></tr>
           <tr><td>eager</td><td>—</td><td>ビューポート待ちせず即再生。既定では画面に入ってから始まる</td></tr>
         </tbody>
@@ -516,6 +519,8 @@
  *                          14.4k / 28.8k / 33.6k / 56k / isdn
  *   max-duration="8000"    speed 指定時の上限(ms)
  *   bytes="102400"         転送量を明示(Resource Timing が取れない時)
+ *   controls="ラベル"      再生ボタンを出す(値がラベル、省略時は Replay)
+ *   manual                 自動再生しない。controls のボタンからだけ再生する
  *   once                   一度再生したらセッション中は再生しない
  *   eager                  ビューポート待ちせず即再生
  *
@@ -746,6 +751,7 @@ class RetroImage extends HTMLElement {
     // 自動再生を諦める条件。<img> には一切触らないので通常表示のまま出る。
     // ボタンは残すので、見たい人は自分の操作で再生できる。
     if (prefersReducedMotion()) return;
+    if (this.hasAttribute('manual')) return;
     if (this.hasAttribute('once') && this.#alreadyPlayed()) return;
 
     // JS がここまで動いた時点で隠す。以降は必ず自前で描いて戻す責任を負う。

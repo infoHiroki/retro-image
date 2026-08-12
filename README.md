@@ -4,7 +4,7 @@
 
 ![走査線・インターレース・プログレッシブの 3 方式を、同じ画像・同じ所要時間で並べた比較](docs/stages.png)
 
-**デモ** → https://infohiroki.github.io/retro-image/
+デモは `dist/standalone.html` をブラウザで開けば動きます（JS も画像も埋め込み済みの 1 ファイルなので、ローカルサーバーは要りません）。
 
 ## これは何か
 
@@ -50,6 +50,7 @@ JS が動かなければ `<img>` がそのまま表示されます。
 | `max-duration` | `8000` | `speed` 使用時の上限。長すぎる待ちを切る |
 | `bytes` | 自動 | 転送量を明示。未指定なら Resource Timing から取得し、取れなければ画素数から概算する |
 | `controls` | — | 再生ボタンを出す。属性の値がラベルになる（`controls="もう一度見る"`、省略時は `Replay`） |
+| `manual` | — | 自動再生しない。`controls` のボタンからだけ再生する。長い演出を勝手に始めたくないとき用 |
 | `once` | — | 一度再生したらセッション中は再生しない |
 | `eager` | — | ビューポート待ちせず即再生。既定では画面に入ってから始まる |
 
@@ -94,9 +95,9 @@ python3 tools/make-stages.py  # README の比較画像を生成し直す
 
 ```
 retro-image.js         コンポーネント本体。配布するのはこれ 1 つ
-index.html             デモページ（GitHub Pages で配信、使い方の見本も兼ねる）
-demo/template.html     デモページのソース
-dist/standalone.html   JS と画像を全部埋めた 1 ファイル版
+dist/standalone.html   1 ファイル完結のデモ。ブラウザで直接開ける
+index.html             外部ファイル参照版のデモ。使い方の見本を兼ねる（配信が必要）
+demo/template.html     上 2 つの共通ソース
 ```
 
 ## ライセンス

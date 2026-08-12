@@ -103,6 +103,12 @@ def run(browser, name, url, capture_shots, external_image=True):
         page.evaluate("() => !document.querySelector('#hero .retro-image__replay')"),
     )
     check(
+        "manual なら自動再生されない（img が隠れていない）",
+        page.evaluate(
+            "() => document.querySelector('#controls-demo img').style.visibility === ''"
+        ),
+    )
+    check(
         "ボタンを押すと再生が始まる",
         page.evaluate(
             """() => new Promise((resolve) => {
