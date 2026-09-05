@@ -35,6 +35,7 @@ const SPEEDS = {
 
 // 当時の体感は「28.8k で 2.8KB/s 前後」。プロトコルのオーバーヘッド込みで
 // bps / 10 バイト毎秒に落とすとその実測値に合う。
+/** @param {number} bps */
 const bytesPerSec = (bps) => bps / 10;
 
 const DEFAULT_DURATION = 1400;
@@ -50,6 +51,12 @@ const prefersReducedMotion = () =>
    元画像の実ピクセル行ではなく表示サイズを刻む。 */
 
 /** ベースライン JPEG / 非インターレース GIF: 上から順に行が届く。 */
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {HTMLImageElement} img
+ * @param {number} w
+ * @param {number} h
+ */
 function scanlinePainter(ctx, img, w, h) {
   let drawn = 0; // 描画済みの行数(dest)
   const rowSrc = img.naturalHeight / h;
@@ -59,6 +66,7 @@ function scanlinePainter(ctx, img, w, h) {
       drawn = 0;
       ctx.clearRect(0, 0, w, h);
     },
+    /** @param {number} p 0〜1 の進み具合 */
     paint(p) {
       const target = Math.round(p * h);
       if (target <= drawn) return;
@@ -74,6 +82,12 @@ function scanlinePainter(ctx, img, w, h) {
 
 /** GIF89a のインターレース: 8行おき → 4行おき → 2行おき → 残り の 4 パス。
     各パスで届いた行を「次のパスが埋めるまで」縦に引き伸ばす = あのブラインド。 */
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {HTMLImageElement} img
+ * @param {number} w
+ * @param {number} h
+ */
 function interlacePainter(ctx, img, w, h) {
   const PASSES = [
     [0, 8, 8], // start, step, 引き伸ばす行数
@@ -81,6 +95,7 @@ function interlacePainter(ctx, img, w, h) {
     [2, 4, 2],
     [1, 2, 1],
   ];
+  /** @type {[number, number][]} */
   const events = [];
   for (const [start, step, fill] of PASSES) {
     for (let y = start; y < h; y += step) events.push([y, fill]);
@@ -96,6 +111,7 @@ function interlacePainter(ctx, img, w, h) {
       idx = 0;
       ctx.clearRect(0, 0, w, h);
     },
+    /** @param {number} p 0〜1 の進み具合 */
     paint(p) {
       const target = Math.min(events.length, Math.round(p * events.length));
       while (idx < target) {
@@ -113,6 +129,12 @@ function interlacePainter(ctx, img, w, h) {
 
 /** プログレッシブ JPEG: 低周波成分から届くので、粗い全体像が先に出て
     段階的に解像度が上がる。scale と累積データ割合の対応で近似する。 */
+/**
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {HTMLImageElement} img
+ * @param {number} w
+ * @param {number} h
+ */
 function progressivePainter(ctx, img, w, h) {
   const off = document.createElement('canvas');
   const octx = off.getContext('2d');
@@ -140,6 +162,7 @@ function progressivePainter(ctx, img, w, h) {
       stage = -1;
       ctx.clearRect(0, 0, w, h);
     },
+    /** @param {number} p 0〜1 の進み具合 */
     paint(p) {
       let next = -1;
       for (let i = 0; i < STAGES.length; i++) {
@@ -155,7 +178,8 @@ function progressivePainter(ctx, img, w, h) {
       const pad = blur * 3;
       ctx.filter = blur ? `blur(${blur}px)` : 'none';
 
-      if (scale === 1) {
+      if (scale === 1 || !octx) {
+        // ⚠️ 裏キャンバスの 2d が取れない時もここに落とす（縮小せずそのまま描く）。
         ctx.drawImage(img, -pad, -pad, w + pad * 2, h + pad * 2);
       } else {
         const sw = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -212,18 +236,23 @@ retro-image > .retro-image__replay:hover { opacity: 1; }
 
 /* --------------------------------------------------------------- transfer */
 
-/** 実際の転送バイト数を取れるなら取る(同一オリジン、または TAO 付き)。 */
+/**
+ * 実際の転送バイト数を取れるなら取る(同一オリジン、または TAO 付き)。
+ * @param {HTMLElement} el
+ * @param {HTMLImageElement} img
+ */
 function resolveBytes(el, img) {
   const attr = Number(el.getAttribute('bytes'));
   if (Number.isFinite(attr) && attr > 0) return attr;
 
   const src = img.currentSrc || img.src;
   try {
-    const entry = performance
-      .getEntriesByType('resource')
-      .find((r) => r.name === src);
+    // サイズは PerformanceResourceTiming にしか無い（基底の PerformanceEntry には無い）。
+    const entry = /** @type {PerformanceResourceTiming | undefined} */ (
+      performance.getEntriesByType('resource').find((r) => r.name === src)
+    );
     const size = entry && (entry.encodedBodySize || entry.transferSize);
-    if (size > 0) return size;
+    if (size && size > 0) return size;
   } catch {
     /* Resource Timing が使えない環境 */
   }
@@ -234,6 +263,41 @@ function resolveBytes(el, img) {
 /* -------------------------------------------------------------- component */
 
 class RetroImage extends HTMLElement {
+  // ⚠️ **`@type` は説明と同じ行に書かない。** 同じ行だとタグとして拾われず、
+  //    初期値からの推論（`null` 型）になって、代入する側が全部エラーになる。
+  /**
+   * 演出をかける <img>。無ければ何もしない。
+   * @type {HTMLImageElement | null}
+   */
+  img = null;
+  /**
+   * 上に重ねる canvas。
+   * @type {HTMLCanvasElement | null}
+   */
+  _canvas = null;
+  /**
+   * requestAnimationFrame の id。0 は「動いていない」。
+   * @type {number}
+   */
+  _raf = 0;
+  /**
+   * 画像が出ないまま終わるのを防ぐ保険。
+   * @type {ReturnType<typeof setTimeout> | undefined}
+   */
+  _failsafe;
+  /**
+   * 初回再生のきっかけ。
+   * @type {IntersectionObserver | undefined}
+   */
+  _observer;
+  /**
+   * 再生ボタン（controls 属性がある時だけ生える）。
+   * @type {HTMLButtonElement | null}
+   */
+  _button = null;
+  _playing = false;
+  _ready = false;
+
   connectedCallback() {
     if (this._ready) return;
     this._ready = true;
@@ -306,7 +370,7 @@ class RetroImage extends HTMLElement {
   }
 
   #storageKey() {
-    return `retro-image:${this.img.currentSrc || this.img.src}`;
+    return `retro-image:${this.img?.currentSrc || this.img?.src || ''}`;
   }
 
   #alreadyPlayed() {
@@ -336,7 +400,7 @@ class RetroImage extends HTMLElement {
     this._observer = new IntersectionObserver(
       (entries) => {
         if (!entries.some((e) => e.isIntersecting)) return;
-        this._observer.disconnect();
+        this._observer?.disconnect();
         this.#start();
       },
       { rootMargin: '64px' }
@@ -346,8 +410,9 @@ class RetroImage extends HTMLElement {
 
   #duration() {
     const speed = this.getAttribute('speed');
-    if (speed && SPEEDS[speed]) {
-      const ms = (resolveBytes(this, this.img) / bytesPerSec(SPEEDS[speed])) * 1000;
+    const bps = speed ? SPEEDS[/** @type {keyof typeof SPEEDS} */ (speed)] : undefined;
+    if (bps && this.img) {
+      const ms = (resolveBytes(this, this.img) / bytesPerSec(bps)) * 1000;
       const cap = Number(this.getAttribute('max-duration')) || DEFAULT_MAX_DURATION;
       return Math.min(ms, cap);
     }
@@ -389,7 +454,9 @@ class RetroImage extends HTMLElement {
     }
 
     const mode = this.getAttribute('mode') || 'interlace';
-    const painter = (PAINTERS[mode] || interlacePainter)(ctx, img, w, h);
+    const painter = (PAINTERS[/** @type {keyof typeof PAINTERS} */ (mode)] || interlacePainter)(
+      ctx, img, w, h
+    );
     painter.reset();
 
     const duration = this.#duration();
@@ -402,7 +469,9 @@ class RetroImage extends HTMLElement {
       new CustomEvent('retro:start', { bubbles: true, detail: { mode, duration } })
     );
 
+    /** @type {number | null} */
     let t0 = null;
+    /** @param {number} now */
     const tick = (now) => {
       if (t0 === null) t0 = now;
       const p = Math.min(1, (now - t0) / duration);
@@ -416,6 +485,7 @@ class RetroImage extends HTMLElement {
     this._raf = requestAnimationFrame(tick);
   }
 
+  /** @param {string} mode */
   #finish(mode) {
     this._playing = false;
     this.#markPlayed();
